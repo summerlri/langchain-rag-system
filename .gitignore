@@ -1,0 +1,36 @@
+# Python 虚拟环境
+venv/
+
+# Python 临时文件
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 前端依赖
+frontend/node_modules/
+frontend/dist/
+
+# 敏感配置（包含真实 API Key）
+.env
+
+# 运行产生的数据
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# 测试产生的文件
+.pytest_cache/
+reports/
+.coverage
+
+# IDE 配置
+.vscode/
+.idea/
+
+# 系统文件
+Thumbs.db
+.DS_Store
