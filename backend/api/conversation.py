@@ -1,14 +1,18 @@
 """
 会话管理 API
 """
+import json
+import io
 from datetime import datetime
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.db.database import get_db
 from backend.models.user import User
-from backend.models.conversation import Conversation
+from backend.models.conversation import Conversation, Message
 from backend.core.deps import get_current_user
 from backend.core.exceptions import NotFoundException
 from backend.schemas.conversation import (
@@ -124,3 +128,92 @@ async def delete_conversation(
     await db.delete(conv)
     await db.flush()
     return {"message": "会话已删除"}
+
+
+@router.get("/{conversation_id}/export")
+async def export_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """导出对话为 Markdown 文件"""
+    # 查询会话 + 关联消息（用 selectinload 避免 N+1 查询）
+    result = await db.execute(
+        select(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
+        )
+        .options(selectinload(Conversation.messages))
+    )
+    conv = result.scalar_one_or_none()
+    if not conv:
+        raise NotFoundException("会话不存在")
+
+    # 构建 Markdown 内容
+    lines = [
+        f"# {conv.title}",
+        "",
+        f"- **会话 ID**: {conv.id}",
+        f"- **创建时间**: {conv.created_at}",
+        f"- **更新时间**: {conv.updated_at}",
+        f"- **消息数量**: {len(conv.messages)} 条",
+        "",
+        "---",
+        "",
+    ]
+
+    for msg in conv.messages:
+        # 角色图标和名称
+        if msg.role == "user":
+            role_label = "👤 用户"
+        else:
+            role_label = "🤖 AI 助手"
+
+        lines.append(f"## {role_label}")
+        lines.append("")
+        lines.append(msg.content)
+        lines.append("")
+
+        # 如果是 AI 回答，附带引用来源
+        if msg.role == "assistant" and msg.sources:
+            try:
+                sources = json.loads(msg.sources)
+                if sources:
+                    lines.append("> 📚 **参考来源**:")
+                    for i, src in enumerate(sources, 1):
+                        filename = src.get("filename", "未知文件")
+                        score = src.get("score", 0)
+                        lines.append(f"> [{i}] {filename}（匹配度: {score * 100:.1f}%）")
+                    lines.append("")
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # 如果有 token 和延迟统计
+        info_parts = []
+        if msg.token_count:
+            info_parts.append(f"Token: {msg.token_count}")
+        if msg.latency_ms:
+            info_parts.append(f"耗时: {msg.latency_ms}ms")
+        if info_parts:
+            lines.append(f"*{' | '.join(info_parts)}*")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+    md_content = "\n".join(lines)
+
+    # 文件名：取标题的安全子串
+    safe_title = conv.title.replace(" ", "_").replace("/", "_").replace("\\", "_")[:30]
+    filename = f"{safe_title}_{conv.id[:8]}.md"
+
+    # 用 BytesIO 流式返回，触发浏览器下载
+    bio = io.BytesIO(md_content.encode("utf-8"))
+    return StreamingResponse(
+        bio,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

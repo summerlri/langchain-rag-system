@@ -6,6 +6,9 @@
         <h3>RAG 电商知识库问答</h3>
       </div>
       <div class="header-right">
+        <el-button v-if="currentConvId" @click="handleExport" :icon="Download" plain size="small">
+          导出
+        </el-button>
         <el-button v-if="authStore.isAdmin" @click="$router.push('/admin/knowledge')" type="primary" plain size="small">
           知识库管理
         </el-button>
@@ -164,7 +167,7 @@
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus, Delete, Expand, Fold, UserFilled, Cpu, Promotion, User, SwitchButton, Close } from '@element-plus/icons-vue'
+import { Plus, Delete, Expand, Fold, UserFilled, Cpu, Promotion, User, SwitchButton, Close, Download } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { convAPI, chatAPI, kbAPI } from '../api'
 import { marked } from 'marked'
@@ -352,6 +355,29 @@ function scrollToBottom() {
   nextTick(() => {
     msgBottom.value?.scrollIntoView({ behavior: 'smooth' })
   })
+}
+
+async function handleExport() {
+  if (!currentConvId.value) return
+  try {
+    const response = await convAPI.exportMarkdown(currentConvId.value)
+    if (!response.ok) throw new Error('导出失败')
+    const blob = await response.blob()
+    // 从响应头获取文件名，或使用默认名
+    const disposition = response.headers.get('Content-Disposition') || ''
+    const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/)
+    const filename = filenameMatch ? filenameMatch[1] : 'conversation_export.md'
+    // 触发浏览器下载
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    ElMessage.error('导出失败: ' + (e.message || '未知错误'))
+  }
 }
 
 function handleLogout() {

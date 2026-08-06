@@ -62,6 +62,12 @@ export const convAPI = {
   create: (data) => api.post('/conversations', data),
   update: (id, data) => api.put(`/conversations/${id}`, data),
   delete: (id) => api.delete(`/conversations/${id}`),
+  exportMarkdown: (id) => {
+    const token = localStorage.getItem('token')
+    return fetch(`/api/conversations/${id}/export`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+  },
 }
 
 // ==================== 聊天 API (SSE) ====================
