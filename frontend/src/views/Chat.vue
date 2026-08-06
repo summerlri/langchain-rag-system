@@ -361,22 +361,24 @@ async function handleExport() {
   if (!currentConvId.value) return
   try {
     const response = await convAPI.exportMarkdown(currentConvId.value)
-    if (!response.ok) throw new Error('导出失败')
-    const blob = await response.blob()
-    // 从响应头获取文件名，或使用默认名
-    const disposition = response.headers.get('Content-Disposition') || ''
-    const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/)
-    const filename = filenameMatch ? filenameMatch[1] : 'conversation_export.md'
+    const blob = response.data
+    // 从响应头获取文件名（支持 RFC 5987 编码和普通格式）
+    const disposition = response.headers['content-disposition'] || ''
+    const starMatch = disposition.match(/filename\*=UTF-8''([^;]+)/)
+    const filename = starMatch
+      ? decodeURIComponent(starMatch[1])
+      : (disposition.match(/filename="?([^";\n]+)"?/) || [])[1] || 'conversation_export.md'
     // 触发浏览器下载
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = filename
     a.click()
-    URL.revokeObjectURL(url)
+    // 延迟回收 blob URL，等待浏览器下载管理器读取完毕
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
     ElMessage.success('导出成功')
   } catch (e) {
-    ElMessage.error('导出失败: ' + (e.message || '未知错误'))
+    ElMessage.error('导出失败: ' + (e.response?.data?.detail || e.message || '未知错误'))
   }
 }
 

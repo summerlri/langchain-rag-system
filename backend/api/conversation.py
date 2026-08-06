@@ -2,13 +2,17 @@
 会话管理 API
 """
 import json
-import io
+import re
+import logging
+from urllib.parse import quote
 from datetime import datetime
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+logger = logging.getLogger(__name__)
 
 from backend.db.database import get_db
 from backend.models.user import User
@@ -130,6 +134,44 @@ async def delete_conversation(
     return {"message": "会话已删除"}
 
 
+def _format_message_as_markdown(msg) -> list[str]:
+    """将单条消息格式化为 Markdown 行列表"""
+    lines = []
+    role_label = "👤 用户" if msg.role == "user" else "🤖 AI 助手"
+    lines.append(f"## {role_label}")
+    lines.append("")
+    lines.append(msg.content)
+    lines.append("")
+
+    # AI 回答附带引用来源
+    if msg.role == "assistant" and msg.sources:
+        try:
+            sources = json.loads(msg.sources)
+            if sources:
+                lines.append("> 📚 **参考来源**:")
+                for i, src in enumerate(sources, 1):
+                    filename = src.get("filename", "未知文件")
+                    score = src.get("score", 0)
+                    lines.append(f"> [{i}] {filename}（匹配度: {score * 100:.1f}%）")
+                lines.append("")
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("导出对话时解析 sources JSON 失败: %s", msg.id)
+
+    # Token 和延迟统计（用 is not None 避免 0 值被误判为空）
+    info_parts = []
+    if msg.token_count is not None:
+        info_parts.append(f"Token: {msg.token_count}")
+    if msg.latency_ms is not None:
+        info_parts.append(f"耗时: {msg.latency_ms}ms")
+    if info_parts:
+        lines.append(f"*{' | '.join(info_parts)}*")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    return lines
+
+
 @router.get("/{conversation_id}/export")
 async def export_conversation(
     conversation_id: str,
@@ -164,56 +206,21 @@ async def export_conversation(
     ]
 
     for msg in conv.messages:
-        # 角色图标和名称
-        if msg.role == "user":
-            role_label = "👤 用户"
-        else:
-            role_label = "🤖 AI 助手"
-
-        lines.append(f"## {role_label}")
-        lines.append("")
-        lines.append(msg.content)
-        lines.append("")
-
-        # 如果是 AI 回答，附带引用来源
-        if msg.role == "assistant" and msg.sources:
-            try:
-                sources = json.loads(msg.sources)
-                if sources:
-                    lines.append("> 📚 **参考来源**:")
-                    for i, src in enumerate(sources, 1):
-                        filename = src.get("filename", "未知文件")
-                        score = src.get("score", 0)
-                        lines.append(f"> [{i}] {filename}（匹配度: {score * 100:.1f}%）")
-                    lines.append("")
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        # 如果有 token 和延迟统计
-        info_parts = []
-        if msg.token_count:
-            info_parts.append(f"Token: {msg.token_count}")
-        if msg.latency_ms:
-            info_parts.append(f"耗时: {msg.latency_ms}ms")
-        if info_parts:
-            lines.append(f"*{' | '.join(info_parts)}*")
-            lines.append("")
-
-        lines.append("---")
-        lines.append("")
+        lines.extend(_format_message_as_markdown(msg))
 
     md_content = "\n".join(lines)
 
-    # 文件名：取标题的安全子串
-    safe_title = conv.title.replace(" ", "_").replace("/", "_").replace("\\", "_")[:30]
+    # 文件名清理：替换 Windows 和 Markdown 中不允许的字符
+    safe_title = re.sub(r'[<>:"/\\|?*#]', '_', conv.title)
+    safe_title = safe_title.replace(" ", "_").strip("._")[:50]
     filename = f"{safe_title}_{conv.id[:8]}.md"
 
-    # 用 BytesIO 流式返回，触发浏览器下载
-    bio = io.BytesIO(md_content.encode("utf-8"))
-    return StreamingResponse(
-        bio,
+    # 用 RFC 5987 编码处理中文等非 ASCII 字符，兼容所有浏览器
+    encoded_filename = quote(filename, safe="")
+    content_disposition = f"attachment; filename*=UTF-8''{encoded_filename}"
+
+    return Response(
+        content=md_content.encode("utf-8"),
         media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-        },
+        headers={"Content-Disposition": content_disposition},
     )
