@@ -31,6 +31,9 @@ reports/
 .vscode/
 .idea/
 
+# 质量门禁标记文件（Agent 生成，不提交）
+.claude/pass/*.pass
+
 # 系统文件
 Thumbs.db
 .DS_Store

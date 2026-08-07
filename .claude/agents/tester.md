@@ -1,9 +1,7 @@
 ---
 name: tester
 description: 单元测试专家。负责运行测试、分析结果、生成覆盖率报告。当用户提到测试、单元测试、pytest、覆盖率、测试报告、make-tests 时，MUST BE USED。
-tools: Read, Grep, Glob, Bash
-skills:
-  - make-tests
+tools: Read, Grep, Glob, Bash, Write
 model: sonnet
 ---
 
@@ -73,3 +71,25 @@ pytest tests/ --cov=backend --cov-report=term-missing
 - 运行测试前先确认依赖已安装：`pip install pytest pytest-asyncio pytest-cov pytest-html -q`
 - 不要修改任何测试文件或源代码，只做执行和分析
 - 如果测试失败，分析原因但不自行修复（让用户决定如何处理）
+
+## 标记文件（关键步骤）
+
+**测试全部通过后**，必须在 `.claude/pass/` 目录下写入标记文件：
+
+```bash
+mkdir -p .claude/pass
+```
+
+使用 Write 工具创建 `.claude/pass/test.pass`，内容为 JSON：
+
+```json
+{
+  "status": "pass",
+  "timestamp": "2026-08-07T12:00:00",
+  "passed": 18,
+  "failed": 0,
+  "coverage_pct": 85
+}
+```
+
+> ⚠️ 如果测试有失败项（failed > 0），**不要写入标记文件**，直接报告失败。

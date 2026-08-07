@@ -1,10 +1,7 @@
 ---
 name: quality-engineer
 description: 代码质量工程师。负责代码安全审计、注释质量、代码规范、异常处理、类型标注等全方位质量检查。当用户提到代码质量、质量检查、代码审查、code review、质量门禁、上线前检查、质量报告时，MUST BE USED。
-tools: Read, Grep, Glob, Bash
-skills:
-  - security-audit
-  - comments-check
+tools: Read, Grep, Glob, Bash, Write
 model: sonnet
 ---
 
@@ -153,3 +150,25 @@ Phase 3 (下月): 逐步优化 🟡 改进项
 - 如果被检查文件数 > 30，优先深度检查核心模块，其他做快速扫描
 - 报告语言通俗，让非技术人员也能理解问题严重性
 - 每个问题必须给出具体的文件路径、行号和修复示例
+
+## 标记文件（关键步骤）
+
+**质量检查通过后**（综合评分 ≥ 70 且无阻断项），必须在 `.claude/pass/` 目录下写入标记文件：
+
+```bash
+mkdir -p .claude/pass
+```
+
+使用 Write 工具创建 `.claude/pass/quality.pass`，内容为 JSON：
+
+```json
+{
+  "status": "pass",
+  "timestamp": "2026-08-07T12:00:00",
+  "score": 85,
+  "grade": "A",
+  "issues": 0
+}
+```
+
+> ⚠️ 如果综合评分 < 70 或存在阻断项（严重安全问题），**不要写入标记文件**，直接报告失败。

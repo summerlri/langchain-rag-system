@@ -1,0 +1,2 @@
+# 标记文件目录 — 存放 tester 和 quality-engineer 的通过标记
+# 这些文件由 Agent 自动生成和清理，不提交到 Git
