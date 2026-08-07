@@ -1,6 +1,7 @@
 """
 SQLite 数据库连接和会话管理
 """
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from backend.config import get_settings
@@ -12,7 +13,30 @@ engine = create_async_engine(
     settings.database_url,
     echo=False,
     connect_args={"check_same_thread": False},
+    pool_size=5,
+    max_overflow=10,
 )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 关键：每个新连接都要设置这些 PRAGMA
+# SQLite 在 WAL 模式下支持"一写多读"并发，但没有 busy_timeout
+# 的话遇到锁会立刻报错（SQLITE_BUSY），设了之后会等待而不是放弃
+# ═══════════════════════════════════════════════════════════════
+@event.listens_for(engine.sync_engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """每个数据库连接建立时都执行这些 PRAGMA"""
+    cursor = dbapi_connection.cursor()
+    # WAL 模式：允许读写并发（文件级持久，设一次即可，但每个连接都设也没副作用）
+    cursor.execute("PRAGMA journal_mode=WAL")
+    # busy_timeout：遇到锁等 5 秒，而不是立刻报 SQLITE_BUSY 错误
+    cursor.execute("PRAGMA busy_timeout=5000")
+    # synchronous=NORMAL：WAL 模式下安全且性能更高（减少 fsync 次数）
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    # 外键约束
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 
 # 异步会话工厂
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
