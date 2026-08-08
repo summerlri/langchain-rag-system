@@ -12,15 +12,20 @@
 ## 项目结构
 
 ```
-backend/api/          # REST API: auth, chat(SSE), conversation, knowledge_base
+backend/api/          # REST API: auth, chat(SSE), conversation(含导出), knowledge_base
 backend/rag/          # RAG 流水线: loader, splitter, embedding, vector_store, retriever, chain, pipeline
 backend/models/       # SQLAlchemy ORM: User, KnowledgeBase, Document, Conversation, Message
 backend/core/         # 安全/JWT, 依赖注入, 异常处理
 backend/schemas/      # Pydantic 请求/响应模型
 backend/cache/        # 两级缓存 (L1 内存 LRU + L2 diskcache)
+backend/db/           # 数据库连接（含 busy_timeout + WAL + 连接池优化）
 frontend/src/         # Vue 3 SPA
 data/                 # SQLite DB + ChromaDB 向量 + 上传文件 + 种子文档
 scripts/seed_data.py  # 生成电商测试知识库文档
+tests/                # 单元/API/RAG 测试 + locustfile.py 压力测试
+.claude/agents/       # 自定义子代理: tester, quality-engineer, gitcommit-agent 等
+.claude/pass/         # 质量门禁标记文件（gitignore，不提交）
+.githooks/            # Git pre-commit 钩子（拦截未经检查的提交）
 ```
 
 ## 自定义技能
@@ -40,8 +45,8 @@ scripts/seed_data.py  # 生成电商测试知识库文档
 2. **登录获取 Token** — 发送:
    ```
    POST http://localhost:8000/api/auth/login
-   Content-Type: application/x-www-form-urlencoded
-   username=admin&password=123456
+   Content-Type: application/json
+   {"username":"admin","password":"123456"}
    ```
    从响应的 `access_token` 字段提取 JWT token。
 
@@ -563,6 +568,31 @@ tests/
 
 ---
 
+### /gitcommit — 质量门禁提交
+
+**用途**: 提交代码前自动运行测试和质量检查，全部通过后才放行提交。代替直接 `git commit`。
+
+**调用方式**: `/gitcommit` 或说"提交代码"
+
+**流程**:
+1. gitcommit-agent 并行启动 tester 和 quality-engineer
+2. tester 运行全部测试 → 通过则写入 `.claude/pass/test.pass`
+3. quality-engineer 审计安全/注释/规范 → 通过则写入 `.claude/pass/quality.pass`
+4. 两个标记文件都存在 → 调用 `/git-save` 提交并推送
+5. 任一失败 → 报告错误，拒绝提交
+
+**Git 钩子**: `.githooks/pre-commit` 在 `git config core.hooksPath .githooks` 配置后生效，拦截终端里直接敲的 `git commit`。
+
+### 🏋️ 压力测试
+
+```bash
+locust -f tests/locustfile.py --host=http://localhost:8000
+```
+
+浏览器打开 http://localhost:8089，设置并发用户数。3 个场景模拟真实用户行为（浏览/问答/导出）。
+
+---
+
 ## 开发注意事项
 
 - 所有 API 请求（除 login/register/health）都需要 `Authorization: Bearer <token>` 头。
@@ -571,3 +601,4 @@ tests/
 - 修改 RAG 参数（chunk_size、chunk_overlap、top_k 等）在 `backend/rag/pipeline.py` 和 `backend/rag/splitter.py` 中。
 - ChromaDB 使用持久化模式，数据在 `data/chroma/`，清空此目录可重置所有向量数据。
 - `.env` 中的 `DASHSCOPE_API_KEY` 必须有效才能使用 embedding 和 LLM 生成。
+- SQLite 在 `backend/db/database.py` 中通过 `@connect` 事件设置 `busy_timeout=5000` + `journal_mode=WAL`，确保并发写入时等待而非报错。
