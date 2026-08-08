@@ -9,7 +9,9 @@
 - 💬 **AI 问答** — 基于 RAG 的流式问答，支持多轮对话，打字机效果实时输出
 - 🔍 **检索增强** — 检索结果带来源标注，可追溯答案出自哪篇文档
 - 📝 **对话管理** — 保存/切换/删除历史对话会话
+- 📥 **对话导出** — 一键导出对话为 Markdown 文件，含引用来源标注
 - ⚡ **两级缓存** — L1 内存 LRU + L2 diskcache，加速高频问答
+- 🔒 **质量门禁** — 提交前自动运行测试 + 安全审计，通过才放行
 - 🐳 **一键启动** — `start.bat` 自动初始化数据库 + 生成测试数据 + 启动前后端
 
 ## 🛠 技术栈
@@ -193,23 +195,31 @@ python scripts/seed_data.py
 | `BACKEND_PORT` | 后端端口 | `8000` |
 | `FRONTEND_PORT` | 前端端口 | `5173` |
 
+> 💡 **并发优化**: SQLite 通过 `busy_timeout=5000` + `journal_mode=WAL` + 连接池，支持 100 人并发写入（详见 `backend/db/database.py`）。
+
 ## 🧪 运行测试
 
+### 单元测试 + 覆盖率
+
 ```bash
-# 全部测试 + 覆盖率报告
 pytest tests/ -v --cov=backend --cov-report=html:reports/coverage
-
-# 仅单元测试
-pytest tests/unit/ -v
-
-# 仅 API 测试
-pytest tests/api/ -v
-
-# 仅 RAG 流水线测试
-pytest tests/rag/ -v
+pytest tests/unit/ -v   # 仅单元测试
+pytest tests/api/ -v     # 仅 API 测试
+pytest tests/rag/ -v     # 仅 RAG 流水线测试
 ```
 
-报告输出在 `reports/` 目录下，浏览器打开 `reports/test_report.html` 查看。
+报告输出在 `reports/` 目录下。
+
+### 压力测试（Locust）
+
+模拟 100 人同时使用系统：
+
+```bash
+pip install locust
+locust -f tests/locustfile.py --host=http://localhost:8000
+```
+
+浏览器打开 http://localhost:8089，设置并发用户数。测试脚本包含 3 个场景：浏览知识库、AI 问答、导出对话。
 
 ## 📄 License
 
