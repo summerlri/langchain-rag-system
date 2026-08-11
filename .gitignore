@@ -33,6 +33,7 @@ reports/
 # IDE 配置
 .vscode/
 .idea/
+.claude/settings.local.json
 
 # 质量门禁标记文件（Agent 生成，不提交）
 .claude/pass/*.pass

@@ -119,7 +119,10 @@ async def send_message(
     # 为什么是 30? 因为前端会话列表宽度大约能显示 15 个中文字符，30 个半角字符刚好一行
     if conv.title == "新对话":
         conv.title = req.message[:30] + ("..." if len(req.message) > 30 else "")
-    await db.flush()
+    # StreamingResponse 会在当前接口逻辑返回后继续生成内容，而助手消息由新的
+    # AsyncSession 保存。这里必须先提交用户消息并释放 SQLite 写锁，否则流结束时
+    # 第二个会话写入助手消息会触发 "database is locked"。
+    await db.commit()
 
     pipeline = RAGPipeline()
 
