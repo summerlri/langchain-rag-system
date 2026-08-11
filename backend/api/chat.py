@@ -90,6 +90,18 @@ async def send_message(
             raise BadRequestException("系统中还没有知识库，请联系管理员上传文档")
         kb_id = kb.id
 
+    # 当前消息入库前读取最近 8 条历史，让“它、上一款”等追问能够被正确理解。
+    history_result = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(8)
+    )
+    history = [
+        {"role": item.role, "content": item.content}
+        for item in reversed(history_result.scalars().all())
+    ]
+
     # ---- ③ 保存用户消息 ----
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     user_msg = Message(
@@ -128,8 +140,11 @@ async def send_message(
         latency_ms = 0
 
         try:
-            async for event in pipeline.query(kb_id=kb_id, question=req.message):
-                if event["type"] == "sources":
+            async for event in pipeline.query(kb_id=kb_id, question=req.message, history=history):
+                if event["type"] == "rewrite":
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+                elif event["type"] == "sources":
                     sources_data = event["data"]
                     yield f"data: {json.dumps({'type': 'sources', 'data': sources_data}, ensure_ascii=False)}\n\n"
 

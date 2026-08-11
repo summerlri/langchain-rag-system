@@ -48,7 +48,7 @@ class TestRAGPipelineQuery:
 
     @pytest.mark.asyncio
     async def test_query_yields_sources_first(self, mock_deps):
-        """第一个 SSE 事件应该是 sources"""
+        """问题改写后应立即返回 sources"""
         from backend.rag.pipeline import RAGPipeline
 
         pipeline = RAGPipeline()
@@ -58,8 +58,9 @@ class TestRAGPipelineQuery:
         async for event in pipeline.query(kb_id="kb-test", question="iPhone 多少钱？"):
             events.append(event)
 
-        assert len(events) >= 1
-        assert events[0]["type"] == "sources"
+        assert len(events) >= 2
+        assert events[0]["type"] == "rewrite"
+        assert events[1]["type"] == "sources"
 
     @pytest.mark.asyncio
     async def test_query_yields_tokens(self, mock_deps):
@@ -114,6 +115,24 @@ class TestRAGPipelineQuery:
         token_events = [e for e in events if e["type"] == "token"]
         full = "".join([e["content"] for e in token_events])
         assert "暂未收录" in full or "抱歉" in full or "知识库" in full
+
+    @pytest.mark.asyncio
+    async def test_query_rewrites_follow_up_with_history(self, mock_deps, monkeypatch):
+        from backend.rag.pipeline import RAGPipeline
+
+        mock_deps["llm"].invoke.return_value = "iPhone 15 Pro Max 支持多大功率快充？"
+        pipeline = RAGPipeline()
+        pipeline._do_retrieve = mock_deps["retriever"].retrieve_with_scores
+        history = [{"role": "user", "content": "iPhone 15 Pro Max 多少钱？"}]
+
+        events = []
+        async for event in pipeline.query("kb-test", "那它支持多大功率快充？", history=history):
+            events.append(event)
+
+        assert events[0]["type"] == "rewrite"
+        assert "iPhone 15 Pro Max" in events[0]["rewritten_question"]
+        called_query = mock_deps["retriever"].retrieve_with_scores.call_args.args[1]
+        assert "iPhone 15 Pro Max" in called_query
 
 
 class TestRAGPipelineIngest:

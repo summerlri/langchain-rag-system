@@ -3,7 +3,7 @@
 """
 import pytest
 from langchain_core.documents import Document
-from backend.rag.chain import format_docs, create_rag_prompt, RAG_SYSTEM_PROMPT
+from backend.rag.chain import format_docs, format_history, create_rag_prompt, RAG_SYSTEM_PROMPT
 
 
 class TestFormatDocs:
@@ -64,9 +64,20 @@ class TestRAGPrompt:
         prompt = create_rag_prompt()
         assert prompt is not None
         # 可以 format
-        formatted = prompt.format(context="测试上下文", question="测试问题？")
+        formatted = prompt.format(context="测试上下文", history="用户：上一轮问题", question="测试问题？")
         assert "测试上下文" in formatted
         assert "测试问题" in formatted
+
+
+class TestFormatHistory:
+    def test_formats_roles_and_keeps_recent_messages(self):
+        history = [{"role": "user", "content": f"问题{i}"} for i in range(10)]
+        result = format_history(history, limit=2)
+        assert "问题8" in result and "问题9" in result
+        assert "问题0" not in result
+
+    def test_empty_history(self):
+        assert "无历史" in format_history([])
 
 
 class TestRAGSystemPrompt:

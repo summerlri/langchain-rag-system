@@ -6,8 +6,8 @@
 
 - 🔐 **用户认证** — JWT 登录/注册/个人信息管理
 - 📚 **知识库管理** — 创建知识库、上传文档（PDF/Word/Excel/Markdown）、自动分块入库
-- 💬 **AI 问答** — 基于 RAG 的流式问答，支持多轮对话，打字机效果实时输出
-- 🔍 **检索增强** — 检索结果带来源标注，可追溯答案出自哪篇文档
+- 💬 **AI 问答** — 基于 RAG 的流式问答，可结合最近对话改写追问，打字机效果实时输出
+- 🔍 **混合检索** — 语义、关键词与 MMR 多路召回并重排，结果带来源标注
 - 📝 **对话管理** — 保存/切换/删除历史对话会话
 - 📥 **对话导出** — 一键导出对话为 Markdown 文件，含引用来源标注
 - ⚡ **两级缓存** — L1 内存 LRU + L2 diskcache，加速高频问答
@@ -41,7 +41,7 @@
 │   │   ├── splitter.py       # 文本分割器
 │   │   ├── embedding.py      # 百炼 Embedding 封装
 │   │   ├── vector_store.py   # ChromaDB 向量存储
-│   │   ├── retriever.py      # 检索器（相似度 + MMR）
+│   │   ├── retriever.py      # 混合检索器（语义 + 关键词 + MMR + RRF）
 │   │   ├── chain.py          # RAG Prompt 模板
 │   │   └── pipeline.py       # 完整问答流水线
 │   ├── models/               # SQLAlchemy ORM 模型
