@@ -132,7 +132,7 @@ npm run dev
 
 - 前端：http://localhost:5173
 - API 文档：http://localhost:8000/docs
-- 健康检查：http://localhost:8000/health
+- 健康检查：http://localhost:8000/api/health
 
 ## 👤 默认账号
 
@@ -164,7 +164,31 @@ pytest tests/api/ -v
 pytest tests/rag/ -v
 ```
 
-当前功能分支验证结果：**114 项测试通过，后端覆盖率 64%**。
+当前验证结果：**114 项测试通过，后端覆盖率 64%**。
+
+### 真实 RAG 冒烟测试
+
+后端启动且知识库已有文档后，可以验证“登录 → 检索 → 百炼生成 → SSE 流式输出 → 多轮改写 → 消息持久化”的真实链路：
+
+```powershell
+python scripts/rag_ops.py smoke
+```
+
+> ⚠️ 该命令会真实调用百炼 Embedding 和大模型 API，可能产生少量费用。当前验证结果为 **4/4 通过**。
+
+### 本地运行诊断
+
+下面的命令默认只检查本地组件，不调用收费 API：
+
+```powershell
+python scripts/rag_ops.py debug
+```
+
+诊断范围包括后端健康状态、SQLite、ChromaDB collection/chunk 数量、缓存目录和失败文档。如需额外验证 Embedding 连通性，可在确认接受 API 调用后运行：
+
+```powershell
+python scripts/rag_ops.py debug --check-embedding
+```
 
 ### 压力测试
 
