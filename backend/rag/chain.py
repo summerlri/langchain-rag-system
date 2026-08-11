@@ -38,10 +38,29 @@ RAG_SYSTEM_PROMPT = """你是一个专业的电商商品知识库问答助手。
 ## 知识库内容：
 {context}
 
+## 最近对话：
+{history}
+
 ## 用户问题：
 {question}
 
 ## 回答："""
+
+
+QUERY_REWRITE_PROMPT = """你负责把多轮对话中的最新问题改写成可独立检索知识库的问题。
+
+要求：
+1. 补全“它、这个、上一款”等指代，但不要添加对话中不存在的信息
+2. 保留商品型号、价格、日期、规格等关键词
+3. 如果最新问题已经完整，原样返回
+4. 只输出改写后的问题，不要解释
+
+最近对话：
+{history}
+
+最新问题：{question}
+
+改写后的问题："""
 
 
 def format_docs(docs: list) -> str:
@@ -70,6 +89,20 @@ def format_docs(docs: list) -> str:
         content = doc.page_content.strip()
         formatted.append(f"[{i}] 来源: {source}\n{content}")
     return "\n\n---\n\n".join(formatted)
+
+
+def format_history(history: list[dict], limit: int = 8) -> str:
+    """把最近对话压缩成适合问题改写和回答生成的文本。"""
+    if not history:
+        return "（无历史对话）"
+    role_names = {"user": "用户", "assistant": "助手"}
+    lines = []
+    for message in history[-limit:]:
+        role = role_names.get(message.get("role"), message.get("role", "消息"))
+        content = str(message.get("content", "")).strip()
+        if content:
+            lines.append(f"{role}：{content[:1000]}")
+    return "\n".join(lines) or "（无历史对话）"
 
 
 def create_rag_prompt() -> ChatPromptTemplate:

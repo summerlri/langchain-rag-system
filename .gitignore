@@ -1,5 +1,8 @@
 # Python 虚拟环境
 venv/
+venv39/
+venv311/
+.runtime/
 
 # Python 临时文件
 __pycache__/
@@ -30,6 +33,7 @@ reports/
 # IDE 配置
 .vscode/
 .idea/
+.claude/settings.local.json
 
 # 质量门禁标记文件（Agent 生成，不提交）
 .claude/pass/*.pass

@@ -1,2 +1,2 @@
-# 标记文件目录 — 存放 tester 和 quality-engineer 的通过标记
+# 临时质量门禁标记目录；标记由 commit-gate 协调生成且不会提交
 # 这些文件由 Agent 自动生成和清理，不提交到 Git

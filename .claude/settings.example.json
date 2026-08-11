@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest:*)",
+      "Bash(python scripts/rag_ops.py:*)",
+      "Bash(npm.cmd run build:*)"
+    ]
+  }
+}

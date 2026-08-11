@@ -1,91 +1,56 @@
 # CLAUDE.md
 
-本项目是基于 **LangChain + FastAPI + ChromaDB + Vue 3** 的企业级 RAG 知识库问答系统（电商场景）。
+## 项目简介
 
-## 技术栈
+知问台是一个基于 LangChain、FastAPI、ChromaDB 和 Vue 3 的 RAG 知识库，支持多轮追问、语义与关键词混合检索、来源引用和 SSE 流式回答。
 
-- **后端**: Python FastAPI, LangChain, ChromaDB, SQLite (aiosqlite), 阿里云百炼 DashScope
-- **前端**: Vue 3 + Element Plus + Vite
-- **LLM**: 通义千问 qwen-plus | **Embedding**: text-embedding-v2
-- **启动**: 后端 `:8000` / 前端 `:5173` | 默认账号 `admin / 123456`
+## 技术与入口
 
-## 项目结构
+- Python 3.11 推荐，最低 3.10；前端使用 Node.js 18+。
+- 后端：http://localhost:8000；健康检查：`GET /api/health`。
+- 前端：http://localhost:5173；默认本地账号：`admin / 123456`。
+- 登录接口接收 JSON：`{"username":"admin","password":"123456"}`。
+- 真实问答需要 `.env` 中有效的 `DASHSCOPE_API_KEY`。
 
-```
-backend/api/          # REST API: auth, chat(SSE), conversation(含导出), knowledge_base
-backend/rag/          # RAG 流水线: loader, splitter, embedding, vector_store, retriever, chain, pipeline
-backend/models/       # SQLAlchemy ORM: User, KnowledgeBase, Document, Conversation, Message
-backend/core/         # 安全/JWT, 依赖注入, 异常处理
-backend/schemas/      # Pydantic 请求/响应模型
-backend/cache/        # 两级缓存 (L1 内存 LRU + L2 diskcache)
-backend/db/           # 数据库连接（含 busy_timeout + WAL + 连接池优化）
-frontend/src/         # Vue 3 SPA
-data/                 # SQLite DB + ChromaDB 向量 + 上传文件 + 种子文档
-scripts/seed_data.py  # 生成电商测试知识库文档
-tests/                # 单元/API/RAG 测试 + locustfile.py 压力测试
-.claude/agents/       # 自定义子代理: tester, quality-engineer, gitcommit-agent 等
-.claude/pass/         # 质量门禁标记文件（gitignore，不提交）
-.githooks/            # Git pre-commit 钩子（拦截未经检查的提交）
+## 重要目录
+
+```text
+backend/api/          认证、知识库、会话和 SSE 聊天接口
+backend/rag/          加载、切分、向量、混合检索与问答流水线
+frontend/src/         Vue 3 前端
+tests/                unit、api、rag 和 Locust 测试
+scripts/rag_ops.py    真实诊断、入库和 RAG 冒烟测试
+.claude/agents/       组合任务的子代理
+.claude/commands/     可直接调用的确定性命令
+.githooks/            与当前暂存差异绑定的提交门禁
 ```
 
-## 自定义技能
+## 命令
 
----
+- `/test [all|unit|api|rag|coverage]`：运行自动化测试。
+- `/rag-ingest <文件>`：真实上传并等待文档入库。
+- `/rag-smoke-test`：执行三条知识问答和一条多轮追问；会调用百炼 API。
+- `/rag-debug`：检查 API、SQLite、ChromaDB、缓存和失败文档；默认不调用外部 API。
+- `/security-audit [路径]`：只读安全检查。
 
-### /rag-ingest — 快速入库文档
+## 子代理职责
 
-**调用**: `/rag-ingest <文件路径>` | 上传文档到知识库并等待入库完成。先检查 `GET /api/health`，用 `POST /api/auth/login`（JSON 格式 `{"username":"admin","password":"123456"}`）获取 token，再上传文件并轮询状态直到 completed/failed。
+- `rag-debugger`：组合本地诊断并解释 RAG 故障。
+- `quality-reviewer`：根据暂存文件类型选择检查，不无差别扫描全项目。
+- `commit-gate`：显式暂存文件，并行协调测试与质量审查；只有用户要求时才推送。
 
-### /rag-test — RAG 冒烟测试
+## 开发规则
 
-**调用**: `/rag-test` | 跑 3 条固定问题验证 RAG 全链路（检索+生成），汇总通过率。
+- API 除登录、注册和健康检查外均需要 Bearer Token。
+- 文档入库在后台执行，上传后必须轮询到 `completed` 或 `failed`。
+- Chat 使用 SSE；测试时必须解析 `rewrite`、`sources`、`token`、`done` 和 `error` 事件。
+- RAG 单元测试使用 Mock，不得把它描述成真实百炼或真实 ChromaDB 全链路测试。
+- SQLite 的 WAL 和 `busy_timeout` 只能改善本地并发，不代表固定并发容量。
+- `.env`、`.claude/settings.local.json`、运行数据和质量标记不得提交。
 
-### /rag-debug — RAG 调试面板
+## 提交门禁
 
-**调用**: `/rag-debug` | 检查后端健康、ChromaDB collection/chunk 数、SQLite 表统计、缓存、Embedding 连通性，输出诊断表格。
-
-### /make-tests — 单元测试
-
-**调用**: `/make-tests [unit|api|rag|coverage|add <文件>]` | 运行 pytest + 生成 HTML/覆盖率报告。
-
-关键命令:
-```bash
-# 全部测试 + 覆盖率 + HTML 报告
-pytest tests/ -v --tb=short --cov=backend --cov-report=html:reports/coverage --html=reports/test_report.html --self-contained-html
-# 子集: pytest tests/unit/ -v | pytest tests/api/ -v | pytest tests/rag/ -v
-```
-
-Mock 策略: 单元测试纯逻辑 | API 用内存 SQLite | RAG 用 mock LLM/Embedding/ChromaDB。报告在 `reports/test_report.html` 和 `reports/coverage/index.html`。
-
-### /security-audit — 安全审计
-
-**调用**: `/security-audit [路径]` | 五大维度：硬编码敏感信息、注入漏洞、配置文件泄露、认证授权缺陷、依赖风险。只检查不修改。
-
-### /comments-check — 注释质量
-
-**调用**: `/comments-check [路径]` | 三维度：注释覆盖率（目标 30%）、准确性、可读性（小白视角）。跳过 tests/venv 目录。
-
----
-
-### /gitcommit — 质量门禁提交
-
-**调用**: `/gitcommit` 或说"提交代码" | gitcommit-agent 并行跑 tester + quality-engineer，通过后写 `.claude/pass/*.pass` 标记文件，全部通过则调 `/git-save` 提交推送。`.githooks/pre-commit` 兜底拦截终端里的 `git commit`。
-
-### 🏋️ 压力测试
-
-```bash
-locust -f tests/locustfile.py --host=http://localhost:8000
-# → http://localhost:8089 设置并发数
-```
-
----
-
-## 开发注意事项
-
-- 所有 API 请求（除 login/register/health）都需要 `Authorization: Bearer <token>` 头。
-- Chat 接口是 SSE 流式响应，`curl` 需要 `--no-buffer`，前端使用 `EventSource` 或 `fetch` + `ReadableStream`。
-- 文档入库是异步后台任务，上传后需轮询状态确认完成。
-- 修改 RAG 参数（chunk_size、chunk_overlap、top_k 等）在 `backend/rag/pipeline.py` 和 `backend/rag/splitter.py` 中。
-- ChromaDB 使用持久化模式，数据在 `data/chroma/`，清空此目录可重置所有向量数据。
-- `.env` 中的 `DASHSCOPE_API_KEY` 必须有效才能使用 embedding 和 LLM 生成。
-- SQLite 在 `backend/db/database.py` 中通过 `@connect` 事件设置 `busy_timeout=5000` + `journal_mode=WAL`，确保并发写入时等待而非报错。
+1. 只暂存当前任务涉及的文件，禁止 `git add .`。
+2. 测试与质量审查标记必须包含当前暂存差异的 SHA-256 和 UTC 时间。
+3. 标记有效期为 30 分钟；暂存内容变化后自动失效。
+4. 提交完成后删除 `.claude/pass/test.pass` 和 `quality.pass`。

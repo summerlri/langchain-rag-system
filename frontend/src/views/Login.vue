@@ -1,8 +1,9 @@
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <h1 class="auth-title">RAG 电商知识库问答系统</h1>
-      <p class="auth-subtitle">企业级智能问答平台</p>
+      <div class="auth-brand"><span>知</span> KNOWLEDGE DESK</div>
+      <h1 class="auth-title">回到你的<br>知识工作台</h1>
+      <p class="auth-subtitle">从已上传的资料中检索、追问并获得有依据的回答。</p>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" size="large">
         <el-form-item label="用户名" prop="username">
@@ -70,38 +71,42 @@ async function handleLogin() {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+  background: radial-gradient(circle at 18% 20%, rgba(15,159,154,.17), transparent 32%), var(--ink-950);
 }
 
 .auth-card {
   width: 420px;
-  padding: 40px;
+  padding: 44px;
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 4px 24px 24px 24px;
+  box-shadow: var(--shadow-lg);
 }
+.auth-brand { margin-bottom: 34px; color: var(--aqua-dark); font: 750 10px/1 ui-monospace, monospace; letter-spacing: .14em; }
+.auth-brand span { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: 8px; color: white; background: var(--ink-950); border-radius: 8px 8px 8px 2px; font: 700 15px Georgia, serif; }
 
 .auth-title {
-  text-align: center;
-  font-size: 24px;
-  color: #303133;
-  margin-bottom: 8px;
+  font: 700 36px/1.16 Georgia, "Songti SC", serif;
+  color: var(--ink-950);
+  margin-bottom: 12px;
 }
 
 .auth-subtitle {
-  text-align: center;
-  color: #909399;
+  color: var(--ink-600);
+  line-height: 1.7;
   margin-bottom: 32px;
 }
 
 .auth-footer {
   text-align: center;
-  color: #909399;
+  color: var(--ink-400);
   font-size: 14px;
 }
 
 .auth-footer a {
-  color: #409eff;
+  color: var(--aqua-dark);
+  font-weight: 700;
   text-decoration: none;
 }
 </style>

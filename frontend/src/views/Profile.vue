@@ -108,17 +108,18 @@ async function handleChangePassword() {
 <style scoped>
 .profile-page {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--paper);
 }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
-  padding: 0 24px;
-  height: 60px;
+  background: var(--ink-950);
+  color: white;
+  border-bottom: 0;
+  padding: 0 max(24px, 5vw);
+  height: 72px;
 }
 
 .header-left {
@@ -135,7 +136,9 @@ async function handleChangePassword() {
 
 .page-main {
   max-width: 800px;
-  margin: 24px auto;
+  margin: 36px auto;
   padding: 0 24px;
 }
+.profile-card { border-radius: 16px; box-shadow: var(--shadow-sm); }
+.profile-card :deep(.el-card__header) { color: var(--ink-950); font: 700 18px Georgia, "Songti SC", serif; }
 </style>

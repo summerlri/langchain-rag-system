@@ -17,6 +17,7 @@ import uuid
 import time
 import json
 import asyncio
+import hashlib
 from typing import List, AsyncIterator, Optional
 from datetime import datetime
 from langchain_core.documents import Document
@@ -27,7 +28,9 @@ from backend.rag.splitter import split_documents
 from backend.rag.embedding import BailianEmbeddings
 from backend.rag.vector_store import VectorStoreManager
 from backend.rag.retriever import RAGRetriever
-from backend.rag.chain import get_llm, format_docs, RAG_SYSTEM_PROMPT
+from backend.rag.chain import (
+    get_llm, format_docs, format_history, RAG_SYSTEM_PROMPT, QUERY_REWRITE_PROMPT,
+)
 from backend.cache.cache_manager import cache_manager
 
 settings = get_settings()
@@ -182,9 +185,24 @@ class RAGPipeline:
           - 4 是电商场景的平衡点: 一个商品查询通常 1-2 个 chunk 就有答案，
             额外 2 个提供备选和对比信息，既充分又不让 LLM 上下文超长
         """
-        return self.retriever.retrieve_with_scores(kb_id, query, top_k=4)
+        return self.retriever.retrieve_with_scores(kb_id, query, top_k=4, fetch_k=12)
 
-    async def query(self, kb_id: str, question: str) -> AsyncIterator[dict]:
+    async def rewrite_question(self, question: str, history: list[dict]) -> str:
+        """根据最近对话补全指代；失败时安全回退到原问题。"""
+        if not history:
+            return question
+        prompt = QUERY_REWRITE_PROMPT.format(
+            history=format_history(history),
+            question=question,
+        )
+        try:
+            result = await asyncio.to_thread(get_llm_instance().invoke, prompt)
+            rewritten = result.content if hasattr(result, "content") else str(result)
+            return rewritten.strip().strip('"“”') or question
+        except Exception:
+            return question
+
+    async def query(self, kb_id: str, question: str, history: Optional[list[dict]] = None) -> AsyncIterator[dict]:
         """
         执行 RAG 问答流水线，以 SSE (Server-Sent Events) 事件流的方式返回结果。
 
@@ -210,15 +228,25 @@ class RAGPipeline:
         """
         start_time = time.time()
 
+        # Step 0: 把“它多少钱”等依赖上下文的问题改写为可独立检索的问题
+        history = history or []
+        retrieval_question = await self.rewrite_question(question, history)
+        yield {
+            "type": "rewrite",
+            "original_question": question,
+            "rewritten_question": retrieval_question,
+        }
+
         # Step 1: 检索（带缓存）
         # 为什么缓存检索结果?
         #   - 相同问题重复检索会再次调用 Embedding API(百炼 text-embedding-v2 按 token 计费)
         #   - 电商场景下用户的常见问题(如"iPhone多少钱")会被反复问到
         #   - 缓存 30 分钟(1800s): 既覆盖了大部分重复查询窗口，又不会让结果太陈旧
-        cache_key = f"query:{kb_id}:{hash(question)}"
+        query_digest = hashlib.sha256(retrieval_question.encode("utf-8")).hexdigest()
+        cache_key = f"query:{kb_id}:{query_digest}"
         sources = cache_manager.get(cache_key)
         if sources is None:
-            sources = await asyncio.to_thread(self._do_retrieve, kb_id, question)
+            sources = await asyncio.to_thread(self._do_retrieve, kb_id, retrieval_question)
             if sources:
                 cache_manager.set(cache_key, sources, ttl=1800)
 
@@ -247,7 +275,11 @@ class RAGPipeline:
 
         # Step 4: 流式生成 — 把拼接好的 Prompt 发给百炼 Qwen 模型
         llm = get_llm_instance()
-        prompt_text = RAG_SYSTEM_PROMPT.format(context=context, question=question)
+        prompt_text = RAG_SYSTEM_PROMPT.format(
+            context=context,
+            history=format_history(history),
+            question=question,
+        )
         total_tokens = 0
 
         try:

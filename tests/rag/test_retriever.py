@@ -76,6 +76,8 @@ class TestRetrieveWithScores:
             metadata={"filename": "test.txt", "doc_id": "d001", "chunk_index": 5},
         )
         mock_store.similarity_search_with_relevance_scores.return_value = [(doc, 0.92)]
+        mock_store.max_marginal_relevance_search.return_value = [doc]
+        mock_store.get.return_value = {"documents": [doc.page_content], "metadatas": [doc.metadata]}
 
         retriever = RAGRetriever(vector_store_manager=mock_vs)
         results = retriever.retrieve_with_scores("kb-1", "查询", top_k=4)
@@ -85,12 +87,15 @@ class TestRetrieveWithScores:
         assert results[0]["filename"] == "test.txt"
         assert results[0]["doc_id"] == "d001"
         assert results[0]["chunk_index"] == 5
-        assert results[0]["score"] == 0.92
+        assert results[0]["score"] == 1.0
+        assert "semantic" in results[0]["matched_by"]
 
     def test_retrieve_with_scores_empty(self, mock_vs_manager):
         """无结果时返回空列表"""
         mock_vs, mock_store = mock_vs_manager
         mock_store.similarity_search_with_relevance_scores.return_value = []
+        mock_store.max_marginal_relevance_search.return_value = []
+        mock_store.get.return_value = {"documents": [], "metadatas": []}
 
         retriever = RAGRetriever(vector_store_manager=mock_vs)
         results = retriever.retrieve_with_scores("kb-1", "无结果查询", top_k=4)
@@ -102,9 +107,25 @@ class TestRetrieveWithScores:
         mock_vs, mock_store = mock_vs_manager
         doc = Document(page_content="x", metadata={})
         mock_store.similarity_search_with_relevance_scores.return_value = [(doc, 0.1234567)]
+        mock_store.max_marginal_relevance_search.return_value = [doc]
+        mock_store.get.return_value = {"documents": ["x"], "metadatas": [{}]}
 
         retriever = RAGRetriever(vector_store_manager=mock_vs)
         results = retriever.retrieve_with_scores("kb-1", "q", top_k=4)
 
-        # 0.1234567 四舍五入到 4 位小数 = 0.1235
-        assert results[0]["score"] == round(0.1234567, 4)
+        assert results[0]["score"] == 1.0
+
+    def test_keyword_match_can_join_hybrid_candidates(self, mock_vs_manager):
+        mock_vs, mock_store = mock_vs_manager
+        semantic_doc = Document(page_content="手机产品介绍", metadata={"doc_id": "a", "chunk_index": 0})
+        keyword_doc = Document(page_content="型号 ZX-990 售价 4999 元", metadata={"doc_id": "b", "chunk_index": 0})
+        mock_store.similarity_search_with_relevance_scores.return_value = [(semantic_doc, 0.8)]
+        mock_store.max_marginal_relevance_search.return_value = [semantic_doc]
+        mock_store.get.return_value = {
+            "documents": [semantic_doc.page_content, keyword_doc.page_content],
+            "metadatas": [semantic_doc.metadata, keyword_doc.metadata],
+        }
+
+        results = RAGRetriever(mock_vs).retrieve_with_scores("kb-1", "ZX-990 多少钱", top_k=2)
+        keyword_result = next(item for item in results if item["doc_id"] == "b")
+        assert "keyword" in keyword_result["matched_by"]

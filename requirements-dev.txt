@@ -1,0 +1,10 @@
+-r requirements.txt
+
+# 测试与覆盖率
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=5.0.0
+pytest-html>=4.1.0
+
+# 压力测试
+locust>=2.29.0
