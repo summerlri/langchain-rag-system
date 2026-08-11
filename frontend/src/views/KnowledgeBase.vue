@@ -236,17 +236,18 @@ function formatSize(bytes) {
 <style scoped>
 .kb-page {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--paper);
 }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
-  padding: 0 24px;
-  height: 60px;
+  background: var(--ink-950);
+  color: #fff;
+  border-bottom: 0;
+  padding: 0 max(24px, 5vw);
+  height: 72px;
 }
 
 .header-left {
@@ -262,16 +263,18 @@ function formatSize(bytes) {
 }
 
 .page-main {
-  max-width: 1200px;
-  margin: 24px auto;
+  max-width: 1240px;
+  margin: 34px auto;
   padding: 0 24px;
 }
 
 .kb-section, .doc-section {
   background: #fff;
-  border-radius: 8px;
-  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
   margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .section-header {
@@ -283,6 +286,8 @@ function formatSize(bytes) {
 
 .section-header h3 {
   font-size: 16px;
-  color: #303133;
+  color: var(--ink-950);
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 19px;
 }
 </style>

@@ -3,7 +3,11 @@
     <!-- 顶部导航 -->
     <div class="chat-header">
       <div class="header-left">
-        <h3>RAG 电商知识库问答</h3>
+        <div class="brand-mark">知</div>
+        <div>
+          <div class="brand-eyebrow">KNOWLEDGE DESK</div>
+          <h3>知问台</h3>
+        </div>
       </div>
       <div class="header-right">
         <el-button v-if="currentConvId" @click="handleExport" :icon="Download" plain size="small">
@@ -64,9 +68,12 @@
         </div>
 
         <div v-else-if="!currentConvId" class="no-conv">
-          <el-empty description="创建或选择一个对话开始问答" :image-size="120">
-            <el-button type="primary" @click="handleNewSession" :disabled="!hasKB">新建对话</el-button>
-          </el-empty>
+          <div class="welcome-block">
+            <div class="welcome-kicker">从资料中找到答案</div>
+            <h1>问题可以很随意，<br><span>证据必须很具体。</span></h1>
+            <p>创建一段对话。系统会结合上下文理解追问，并同时使用语义与关键词检索。</p>
+            <el-button type="primary" size="large" @click="handleNewSession" :disabled="!hasKB" :icon="Plus">开始提问</el-button>
+          </div>
         </div>
 
         <!-- 消息列表 -->
@@ -108,6 +115,10 @@
               <el-avatar :icon="Cpu" size="small" style="background: #409eff" />
             </div>
             <div class="msg-content">
+              <div v-if="rewrittenQuestion" class="retrieval-trace">
+                <span class="trace-dot"></span>
+                正在检索：{{ rewrittenQuestion }}
+              </div>
               <div class="msg-bubble ai-bubble" v-html="renderMarkdown(streamContent)" />
               <span class="streaming-cursor">▊</span>
             </div>
@@ -122,13 +133,13 @@
             v-model="inputText"
             type="textarea"
             :rows="2"
-            placeholder="输入你的问题，基于知识库进行回答..."
+            placeholder="继续追问，或输入一个新的问题…"
             @keyup.enter.shift="handleSend"
             @keyup.ctrl.enter="handleSend"
             :disabled="streaming"
           />
           <div class="input-actions">
-            <span class="input-hint">Shift+Enter / Ctrl+Enter 发送</span>
+            <span class="input-hint">Enter 换行 · Shift / Ctrl + Enter 发送</span>
             <el-button type="primary" :icon="Promotion" @click="handleSend" :loading="streaming" :disabled="!inputText.trim()">
               {{ streaming ? '生成中...' : '发送' }}
             </el-button>
@@ -185,6 +196,7 @@ const inputText = ref('')
 const streaming = ref(false)
 const streamContent = ref('')
 const currentSources = ref([])
+const rewrittenQuestion = ref('')
 const hasKB = ref(false)
 const noKBDialog = ref(false)
 const msgContainer = ref(null)
@@ -233,6 +245,7 @@ async function handleNewSession() {
 async function switchSession(convId) {
   currentConvId.value = convId
   currentSources.value = []
+  rewrittenQuestion.value = ''
   try {
     const res = await chatAPI.getMessages(convId, 1)
     messages.value = res.data
@@ -271,7 +284,8 @@ async function handleSend() {
   // 开始流式
   streaming.value = true
   streamContent.value = ''
-  currentSources.value = []
+    currentSources.value = []
+    rewrittenQuestion.value = ''
 
   try {
     const response = await chatAPI.sendMessageStream(currentConvId.value, { message: question })
@@ -291,7 +305,9 @@ async function handleSend() {
         if (line.startsWith('data: ')) {
           try {
             const event = JSON.parse(line.slice(6))
-            if (event.type === 'sources') {
+            if (event.type === 'rewrite') {
+              rewrittenQuestion.value = event.rewritten_question === event.original_question ? '' : event.rewritten_question
+            } else if (event.type === 'sources') {
               currentSources.value = event.data || []
             } else if (event.type === 'token') {
               streamContent.value += event.content
@@ -309,6 +325,7 @@ async function handleSend() {
               })
               streamContent.value = ''
               currentSources.value = finalSources
+              rewrittenQuestion.value = ''
               break
             } else if (event.type === 'error') {
               streamContent.value += `\n\n⚠️ ${event.content}`
@@ -712,5 +729,76 @@ function handleLogout() {
   font-size: 12px;
   color: #606266;
   line-height: 1.5;
+}
+
+/* Knowledge Desk visual system */
+.chat-page { background: var(--paper); }
+.chat-header {
+  height: 68px;
+  padding: 0 24px;
+  background: rgba(255,255,255,.94);
+  border-bottom-color: var(--line);
+  backdrop-filter: blur(14px);
+}
+.header-left { display: flex; align-items: center; gap: 11px; }
+.brand-mark {
+  width: 38px; height: 38px; display: grid; place-items: center;
+  color: white; background: var(--ink-950); border-radius: 11px 11px 11px 3px;
+  font-family: Georgia, "Songti SC", serif; font-size: 19px; font-weight: 700;
+}
+.brand-eyebrow { color: var(--aqua-dark); font: 700 9px/1.2 ui-monospace, monospace; letter-spacing: .17em; }
+.header-left h3 { margin-top: 2px; color: var(--ink-950); font: 700 18px/1.1 Georgia, "Songti SC", serif; letter-spacing: .04em; }
+.session-sidebar { width: 276px; background: #f0f5f8; border-right-color: var(--line); }
+.sidebar-header { padding: 18px 14px 12px; }
+.sidebar-header .el-button { height: 42px; border-radius: 12px; box-shadow: 0 7px 18px rgba(15,159,154,.18); }
+.session-list { padding: 4px 10px; }
+.session-item { margin-bottom: 5px; padding: 13px 12px; border: 1px solid transparent; border-radius: 11px; }
+.session-item:hover { background: rgba(255,255,255,.72); border-color: var(--line); }
+.session-item.active { background: var(--surface); border-color: #b8e0de; box-shadow: var(--shadow-sm); }
+.session-title { color: var(--ink-800); font-weight: 650; }
+.session-info { color: var(--ink-400); font-family: ui-monospace, monospace; font-size: 10px; }
+.sidebar-toggle { border-top-color: var(--line); }
+.chat-main { background: radial-gradient(circle at 50% 0%, rgba(15,159,154,.06), transparent 38%), var(--paper); }
+.welcome-block { width: min(680px, 82%); }
+.welcome-kicker { display: inline-flex; margin-bottom: 18px; padding: 6px 10px; color: var(--aqua-dark); background: var(--aqua-soft); border-radius: 7px; font: 700 11px/1 ui-monospace, monospace; letter-spacing: .08em; }
+.welcome-block h1 { margin-bottom: 18px; color: var(--ink-950); font: 700 clamp(36px, 5vw, 64px)/1.12 Georgia, "Songti SC", serif; letter-spacing: -.035em; }
+.welcome-block h1 span { color: var(--aqua-dark); }
+.welcome-block p { max-width: 560px; margin-bottom: 28px; color: var(--ink-600); font-size: 15px; line-height: 1.8; }
+.messages-container { padding: 34px max(24px, 7vw); }
+.message-wrapper { margin-bottom: 24px; }
+.message { gap: 14px; }
+.msg-bubble { max-width: min(760px, 82%); padding: 14px 18px; font-size: 14px; line-height: 1.75; }
+.user-bubble { background: var(--ink-950); border-radius: 16px 16px 4px 16px; box-shadow: 0 9px 22px rgba(16,42,67,.14); }
+.ai-bubble { color: var(--ink-800); background: rgba(255,255,255,.94); border-color: var(--line); border-radius: 4px 16px 16px 16px; box-shadow: var(--shadow-sm); }
+.ai-message .msg-avatar .el-avatar { background: var(--aqua) !important; }
+.msg-sources { max-width: min(760px, 82%); margin-top: 10px; padding: 12px 14px; background: #eef7f7; border-color: #c7e7e5; border-radius: 12px; }
+.sources-title { color: var(--ink-600); letter-spacing: .04em; }
+.source-text { color: var(--ink-600); border-left-color: var(--aqua); }
+.retrieval-trace { display: flex; align-items: center; gap: 8px; margin: 0 0 8px 2px; color: var(--aqua-dark); font-size: 12px; }
+.trace-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--aqua); box-shadow: 0 0 0 5px rgba(15,159,154,.12); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(.72); opacity: .58; } }
+.chat-input { padding: 14px max(24px, 7vw) 18px; background: rgba(247,249,252,.92); border-top: 0; }
+.chat-input :deep(.el-textarea__inner) { min-height: 76px !important; padding: 14px 16px; border-radius: 14px; background: white; box-shadow: 0 0 0 1px var(--line), 0 12px 30px rgba(16,42,67,.07) !important; resize: none; }
+.input-actions { margin-top: 10px; }
+.input-hint { color: var(--ink-400); font-family: ui-monospace, monospace; font-size: 10px; }
+.source-panel { width: 330px; background: #f0f5f8; border-left-color: var(--line); }
+.panel-header { padding: 17px; color: var(--ink-800); border-bottom-color: var(--line); }
+.panel-body { padding: 14px; }
+.panel-source { padding: 13px; background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.panel-filename { color: var(--aqua-dark); font-weight: 700; }
+.panel-text { color: var(--ink-600); }
+
+@media (max-width: 900px) {
+  .source-panel { display: none; }
+  .session-sidebar { width: 220px; }
+  .messages-container, .chat-input { padding-left: 18px; padding-right: 18px; }
+}
+@media (max-width: 640px) {
+  .chat-header { padding: 0 12px; }
+  .brand-eyebrow, .header-left h3 { display: none; }
+  .header-right .el-button span { display: none; }
+  .session-sidebar:not(.collapsed) { position: absolute; z-index: 8; inset: 68px auto 0 0; box-shadow: var(--shadow-lg); }
+  .msg-bubble, .msg-sources { max-width: 92%; }
+  .welcome-block h1 { font-size: 38px; }
 }
 </style>
