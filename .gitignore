@@ -1,5 +1,8 @@
 # Python 虚拟环境
 venv/
+venv39/
+venv311/
+.runtime/
 
 # Python 临时文件
 __pycache__/
